@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <title>Lucky Draw</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
+</head>
+
+<body>
+  <header class="header">
+    <h1 class="title">26th Metta Charity Golf 2025</h1>
+    <p class="subtitle">22nd August 2025 • Seletar Country Club</p>
+  </header>
+
+  <main class="container">
+    <section class="panel inputs">
+      <div class="field">
+        <label for="names">Participants</label>
+        <textarea id="names" placeholder="One name per line"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="prizes">Prizes</label>
+        <textarea id="prizes" placeholder="One prize per line"></textarea>
+      </div>
+
+      <div class="meta">
+        <div>Total participants: <strong id="countNames">0</strong></div>
+        <div>Total prizes: <strong id="countPrizes">0</strong></div>
+        <div>
+          Pre draw count
+          <input id="preCount" type="number" min="1" value="10" />
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="saveLists" class="btn btn-primary">Save lists</button>
+        <button id="loadLists" class="btn">Load lists</button>
+        <button id="clearLists" class="btn btn-ghost">Clear saved</button>
+        <button id="exportExcel" class="btn btn-success">Export Excel</button>
+      </div>
+    </section>
+
+    <section class="panel wheel-and-results">
+      <section class="panel wheel-area">
+        <div id="resultBanner" class="result-banner">Ready</div>
+
+        <div class="wheel-wrap">
+          <canvas id="wheel" width="520" height="520"></canvas>
+          <div class="wheel-overlay">
+            <div class="pointer"></div>
+            <div id="centerText" class="center-text">Ready</div>
+          </div>
+        </div>
+
+        <div class="spin-controls">
+          <button id="spinOnce" class="btn btn-primary">Spin once</button>
+          <button id="preDraw" class="btn btn-primary">Pre draw</button>
+          <button id="stop" class="btn btn-danger">Stop</button>
+          <button id="reset" class="btn btn-ghost">Reset results</button>
+        </div>
+
+        <div class="ticker" id="ticker"></div>
+      </section>
+
+      <section class="results">
+        <div class="results-head">
+          <h2>Results</h2>
+        </div>
+        <table id="resultsTable">
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>Participant</th>
+              <th>Prize</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </section>
+  </main>
+
+  <footer class="footer">Good luck and glow on</footer>
+
+  <script src="script.js"></script>
+</body>
+
+</html>

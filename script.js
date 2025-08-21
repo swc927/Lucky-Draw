@@ -1,0 +1,585 @@
+// Neon Lucky Draw interactive wheel with predraw and Excel export
+// Calm slices, no fussy lines, neon halo, labels on top
+
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+// Elements
+const namesEl = $("#names");
+const prizesEl = $("#prizes");
+const countNamesEl = $("#countNames");
+const countPrizesEl = $("#countPrizes");
+const tickerEl = $("#ticker");
+const centerTextEl = $("#centerText");
+const preCountEl = $("#preCount");
+const resultsTBody = $("#resultsTable tbody");
+const resultBannerEl = document.getElementById("resultBanner");
+
+// Buttons
+$("#saveLists").addEventListener("click", saveLists);
+$("#loadLists").addEventListener("click", loadLists);
+$("#clearLists").addEventListener("click", clearSaved);
+$("#spinOnce").addEventListener("click", spinOnce);
+$("#preDraw").addEventListener("click", preDraw);
+$("#reset").addEventListener("click", resetResults);
+$("#exportExcel").addEventListener("click", exportExcel);
+
+// Stop button
+const stopBtn = $("#stop");
+let stopRequested = false;
+stopBtn.addEventListener("click", () => {
+  stopRequested = true;
+  cancelSpin = true;
+  toast("Stopped");
+});
+
+// Wheel
+const canvas = document.getElementById("wheel");
+const ctx = canvas.getContext("2d", { willReadFrequently: true });
+let rotation = 0;
+let animating = false;
+let cancelSpin = false;
+
+// Data
+let results = []; // { no, name, prize, time }
+let remainingNames = [];
+let remainingPrizes = [];
+
+// Fit canvas to CSS size on HD screens and return the scale
+function fitCanvasToDisplay() {
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const rect = canvas.getBoundingClientRect();
+  const needW = Math.max(1, Math.round(rect.width * dpr));
+  const needH = Math.max(1, Math.round(rect.height * dpr));
+  if (canvas.width !== needW || canvas.height !== needH) {
+    canvas.width = needW;
+    canvas.height = needH;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  return dpr;
+}
+
+// Helpers
+function parseList(text) {
+  return text
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function updateCounts() {
+  countNamesEl.textContent = parseList(namesEl.value).length;
+  countPrizesEl.textContent = parseList(prizesEl.value).length;
+  drawWheel();
+}
+namesEl.addEventListener("input", updateCounts);
+prizesEl.addEventListener("input", updateCounts);
+
+function saveLists() {
+  localStorage.setItem("neon_draw_names", namesEl.value);
+  localStorage.setItem("neon_draw_prizes", prizesEl.value);
+  toast("Lists saved");
+}
+function loadLists() {
+  namesEl.value = localStorage.getItem("neon_draw_names") || "";
+  prizesEl.value = localStorage.getItem("neon_draw_prizes") || "";
+  updateCounts();
+  toast("Loaded saved lists");
+}
+function clearSaved() {
+  localStorage.removeItem("neon_draw_names");
+  localStorage.removeItem("neon_draw_prizes");
+  toast("Saved lists cleared");
+}
+
+// Centre toast
+function toast(msg) {
+  const prev = centerTextEl.textContent;
+  centerTextEl.textContent = msg;
+  setTimeout(() => (centerTextEl.textContent = prev), 900);
+}
+
+// Banner
+function setBanner(message) {
+  if (!resultBannerEl) return;
+  resultBannerEl.textContent = message;
+  resultBannerEl.style.transform = "scale(1.02)";
+  setTimeout(() => (resultBannerEl.style.transform = "scale(1)"), 140);
+}
+
+// Draw wheel with calm slices, optional neon halo, labels last
+// CHANGED: make the flags meaningful
+const GROUP_SIZE = 10; // group size used for ticks
+const MAX_LABELS_TARGET = 10; // cap visible labels
+const SHOW_DIVIDERS = true; // draw thin outer slice dividers
+const SHOW_GROUP_TICKS = true; // draw short ticks at group boundaries
+const SHOW_INNER_RING = true; // draw a subtle inner ring
+const NEON_GLOW = true; // neon rim glow
+
+// CHANGED: drawWheel now respects all flags
+function drawWheel() {
+  const scale = fitCanvasToDisplay();
+  ctx.clearRect(0, 0, canvas.width / scale, canvas.height / scale);
+
+  const prizes = parseList(prizesEl.value);
+
+  const cx = canvas.width / 2 / scale;
+  const cy = canvas.height / 2 / scale;
+  const rOuter = Math.min(cx, cy) - 10;
+  const rInner = rOuter * 0.22; // inner ring radius if enabled
+
+  // gentle pulse for neon breathing
+  const now = performance.now();
+  const pulse = 0.8 + 0.2 * Math.sin(now * 0.004);
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotation);
+
+  // helper to draw the rim with or without glow
+  function strokeRim(radius, width = 5) {
+    if (NEON_GLOW) {
+      ctx.shadowColor = "rgba(255,255,255,0.95)";
+      ctx.shadowBlur = 26 * pulse;
+      ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    } else {
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = "rgba(233,241,255,0.85)";
+    }
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  if (prizes.length === 0) {
+    // idle rim only
+    strokeRim(rOuter, 6);
+    ctx.restore();
+    return;
+  }
+
+  const n = prizes.length;
+  const angleStep = (Math.PI * 2) / n;
+
+  // calm face fill
+  ctx.beginPath();
+  ctx.arc(0, 0, rOuter, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(255,255,255,0.00)"; // transparent face
+  ctx.fill();
+
+  // NEW: dividers at the outer rim only if enabled
+  if (SHOW_DIVIDERS) {
+    ctx.save();
+    ctx.shadowBlur = 0; // keep lines crisp
+    ctx.strokeStyle = "rgba(255,255,255,0.20)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < n; i++) {
+      const a = i * angleStep;
+      // short outer tick that does not cross labels
+      const r1 = rOuter * 0.97;
+      const r2 = rOuter;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
+      ctx.lineTo(Math.cos(a) * r2, Math.sin(a) * r2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // NEW: group ticks every GROUP_SIZE slices if enabled
+  if (SHOW_GROUP_TICKS && GROUP_SIZE > 0) {
+    ctx.save();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(233,241,255,0.65)";
+    ctx.lineWidth = 2.5;
+    const groups = Math.ceil(n / GROUP_SIZE);
+    for (let g = 0; g < groups; g++) {
+      const a = g * GROUP_SIZE * angleStep;
+      const r1 = rOuter * 0.93;
+      const r2 = rOuter;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
+      ctx.lineTo(Math.cos(a) * r2, Math.sin(a) * r2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // NEW: inner ring if enabled
+  if (SHOW_INNER_RING) {
+    ctx.save();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(233,241,255,0.35)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, rInner, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // rim last so it feels bright
+  strokeRim(rOuter - 1, 5);
+
+  // labels on top
+  const visible = Math.min(n, MAX_LABELS_TARGET);
+  const step = Math.max(1, Math.ceil(n / visible));
+  ctx.fillStyle = "#e9f1ff";
+  ctx.font = visible > 18 ? "12px Orbitron" : "14px Orbitron";
+  ctx.shadowColor = "rgba(5,6,20,0.85)";
+  ctx.shadowBlur = 4;
+
+  for (let i = 0; i < n; i += step) {
+    const mid = i * angleStep + angleStep / 2;
+    const tx = Math.cos(mid) * (rOuter * 0.68);
+    const ty = Math.sin(mid) * (rOuter * 0.68);
+    ctx.save();
+    ctx.translate(tx, ty);
+    ctx.rotate(mid);
+    drawTextCentered(ctx, prizes[i], 120);
+    ctx.restore();
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawTextCentered(ctx, text, maxWidth) {
+  if (!text) return;
+  const words = String(text).split(" ");
+  const lines = [];
+  let line = words.shift();
+  for (const w of words) {
+    const test = line + " " + w;
+    if (ctx.measureText(test).width < maxWidth) line = test;
+    else {
+      lines.push(line);
+      line = w;
+    }
+  }
+  lines.push(line);
+  lines.forEach((ln, idx) => {
+    ctx.fillText(ln, -ctx.measureText(ln).width / 2, idx * 14);
+  });
+}
+
+// Spin to a specific index with cancel support
+function spinToIndex(index, opts = {}) {
+  const prizes = parseList(prizesEl.value);
+  const n = prizes.length;
+  if (n === 0) return Promise.resolve({ cancelled: false });
+
+  const angleStep = (Math.PI * 2) / n;
+  const targetAngle = (Math.PI * 3) / 2 - (index + 0.5) * angleStep; // pointer at top
+  const extraTurns = (opts.extraTurns ?? 3) + Math.random() * 1.5;
+  let start = rotation % (Math.PI * 2);
+  if (start < 0) start += Math.PI * 2;
+  const finalAngle = targetAngle + extraTurns * Math.PI * 2;
+  const duration = opts.duration ?? 800;
+  const startTime = performance.now();
+
+  animating = true;
+  cancelSpin = false;
+
+  return new Promise((resolve) => {
+    function frame(now) {
+      if (cancelSpin) {
+        animating = false;
+        cancelSpin = false;
+        resolve({ cancelled: true });
+        return;
+      }
+      const t = Math.min(1, (now - startTime) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      rotation = start + (finalAngle - start) * eased;
+      drawWheel();
+      if (t < 1) requestAnimationFrame(frame);
+      else {
+        animating = false;
+        resolve({ cancelled: false });
+      }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+// Results table helpers
+function addResultRow({ no, name, prize, time }) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${no}</td><td>${escapeHtml(name)}</td><td>${escapeHtml(
+    prize
+  )}</td><td>${time}</td>`;
+  resultsTBody.appendChild(tr);
+}
+function escapeHtml(s) {
+  return String(s).replace(
+    /[&<>"']/g,
+    (m) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[
+        m
+      ])
+  );
+}
+
+function resetResults() {
+  results = [];
+  resultsTBody.innerHTML = "";
+  tickerEl.textContent = "";
+  centerTextEl.textContent = "Ready";
+  setBanner("Ready");
+  remainingNames = parseList(namesEl.value);
+  remainingPrizes = parseList(prizesEl.value);
+  drawWheel();
+}
+
+function nowTime() {
+  return new Date().toLocaleString();
+}
+
+// Single spin
+async function spinOnce() {
+  if (animating) return;
+  stopRequested = false;
+
+  if (remainingNames.length === 0) remainingNames = parseList(namesEl.value);
+  if (remainingPrizes.length === 0) remainingPrizes = parseList(prizesEl.value);
+  if (remainingNames.length === 0 || remainingPrizes.length === 0) {
+    toast("Need names and prizes");
+    return;
+  }
+
+  const nameIdx = Math.floor(Math.random() * remainingNames.length);
+  const prizeIdx = Math.floor(Math.random() * remainingPrizes.length);
+  const name = remainingNames.splice(nameIdx, 1)[0];
+  const prize = remainingPrizes[prizeIdx];
+
+  const currentPrizeList = parseList(prizesEl.value);
+  const indexInCurrent = currentPrizeList.findIndex((p) => p === prize);
+  const res = await spinToIndex(Math.max(0, indexInCurrent), { duration: 900 });
+
+  if (res.cancelled) {
+    remainingNames.splice(nameIdx, 0, name);
+    centerTextEl.textContent = "Stopped";
+    drawWheel();
+    return;
+  }
+
+  remainingPrizes.splice(prizeIdx, 1);
+
+  const entry = { no: results.length + 1, name, prize, time: nowTime() };
+  results.push(entry);
+  addResultRow(entry);
+
+  setBanner(`${name} got ${prize}`);
+  centerTextEl.textContent = "Done";
+  tickerLine(`[${String(entry.no).padStart(3, "0")}] ${name} got ${prize}`);
+  drawWheel();
+}
+
+// Predraw continuous
+async function preDraw() {
+  if (animating) return;
+
+  remainingNames = parseList(namesEl.value);
+  remainingPrizes = parseList(prizesEl.value);
+  const maxRounds = Math.min(remainingNames.length, remainingPrizes.length);
+  if (maxRounds === 0) {
+    toast("Need names and prizes");
+    return;
+  }
+
+  let requested = Number(preCountEl.value || maxRounds);
+  if (!Number.isFinite(requested) || requested <= 0) requested = maxRounds;
+  const rounds = Math.min(requested, maxRounds);
+
+  tickerEl.textContent = "";
+  centerTextEl.textContent = "Pre draw running";
+  stopRequested = false;
+
+  const currentPrizeList = parseList(prizesEl.value);
+
+  for (let i = 0; i < rounds; i++) {
+    if (stopRequested) break;
+
+    const nameIdx = Math.floor(Math.random() * remainingNames.length);
+    const prizeIdx = Math.floor(Math.random() * remainingPrizes.length);
+    const name = remainingNames[nameIdx];
+    const prize = remainingPrizes[prizeIdx];
+
+    const indexInCurrent = currentPrizeList.findIndex((p) => p === prize);
+    const res = await spinToIndex(Math.max(0, indexInCurrent), {
+      duration: 300,
+      extraTurns: 1.4,
+    });
+
+    if (stopRequested || res.cancelled) {
+      centerTextEl.textContent = "Stopped";
+      drawWheel();
+      break;
+    }
+
+    remainingNames.splice(nameIdx, 1);
+    remainingPrizes.splice(prizeIdx, 1);
+
+    const entry = { no: results.length + 1, name, prize, time: nowTime() };
+    results.push(entry);
+    addResultRow(entry);
+
+    const label = `${name} got ${prize}`;
+    setBanner(label);
+    centerTextEl.textContent = "Running";
+    tickerLine(`[${String(entry.no).padStart(3, "0")}] ${label}`);
+
+    await wait(90);
+  }
+
+  if (!stopRequested)
+    centerTextEl.textContent = `Pre draw complete ${results.length} pairs`;
+  drawWheel();
+}
+
+function wait(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+function tickerLine(text) {
+  tickerEl.textContent += text + "\n";
+  tickerEl.scrollTop = tickerEl.scrollHeight;
+}
+
+// Excel export using ExcelJS
+async function exportExcel() {
+  if (results.length === 0) {
+    toast("No results yet");
+    return;
+  }
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Lucky Draw";
+  workbook.created = new Date();
+  workbook.properties.date1904 = true;
+  const ws = workbook.addWorksheet("Results", {
+    properties: {
+      defaultColWidth: 18,
+      defaultRowHeight: 18,
+      tabColor: { argb: "FF00FFFF" },
+    },
+    views: [{ state: "frozen", ySplit: 1 }],
+  });
+
+  ws.columns = [
+    { header: "No", key: "no", width: 6 },
+    { header: "Participant", key: "name", width: 28 },
+    { header: "Prize", key: "prize", width: 28 },
+    { header: "Time", key: "time", width: 22 },
+  ];
+  results.forEach((r) => ws.addRow(r));
+
+  const header = ws.getRow(1);
+  header.font = {
+    name: "Calibri",
+    size: 12,
+    bold: true,
+    color: { argb: "FF001F2D" },
+  };
+  header.alignment = { vertical: "middle", horizontal: "center" };
+  header.height = 22;
+  header.fill = {
+    type: "gradient",
+    gradient: "angle",
+    degree: 45,
+    stops: [
+      { position: 0, color: { argb: "FF00F5FF" } },
+      { position: 1, color: { argb: "FF7C4DFF" } },
+    ],
+  };
+
+  for (let i = 2; i <= ws.rowCount; i++) {
+    const row = ws.getRow(i);
+    row.alignment = { vertical: "middle" };
+    if (i % 2 === 0) {
+      row.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFF1F6FF" },
+      };
+    }
+    row.getCell("A").alignment = { horizontal: "center" };
+  }
+
+  ws.addTable({
+    name: "ResultsTable",
+    ref: "A1",
+    headerRow: true,
+    style: {
+      theme: "TableStyleMedium9",
+      showRowStripes: true,
+      showColumnStripes: false,
+    },
+    columns: [
+      { name: "No" },
+      { name: "Participant" },
+      { name: "Prize" },
+      { name: "Time" },
+    ],
+    rows: results.map((r) => [r.no, r.name, r.prize, r.time]),
+  });
+
+  const ws2 = workbook.addWorksheet("Summary");
+  ws2.getCell("A1").value = "Lucky Draw Summary";
+  ws2.getCell("A1").font = {
+    name: "Calibri",
+    size: 16,
+    bold: true,
+    color: { argb: "FF7C4DFF" },
+  };
+  ws2.getCell("A3").value = "Participants";
+  ws2.getCell("B3").value = countNamesEl.textContent;
+  ws2.getCell("A4").value = "Prizes";
+  ws2.getCell("B4").value = countPrizesEl.textContent;
+  ws2.getCell("A5").value = "Pairs";
+  ws2.getCell("B5").value = results.length;
+  ws2.getColumn(1).width = 20;
+  ws2.getColumn(2).width = 20;
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `lucky-draw-results.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  URL.revokeObjectURL(a.href);
+  a.remove();
+}
+
+// Init
+function initCanvasSize() {
+  // set a safe default CSS size so the first fit works
+  canvas.style.width = "min(520px, 92vw)";
+  canvas.style.height = "auto";
+  // set a default internal size
+  canvas.width = 520;
+  canvas.height = 520;
+}
+initCanvasSize();
+loadLists();
+updateCounts();
+resetResults();
+
+// breathing neon even when idle
+let glowRAF = null;
+function startGlowLoop() {
+  if (glowRAF) return;
+  function loop() {
+    if (!animating) drawWheel();
+    glowRAF = requestAnimationFrame(loop);
+  }
+  glowRAF = requestAnimationFrame(loop);
+}
+startGlowLoop();
+
+window.addEventListener("resize", () => {
+  drawWheel();
+});
