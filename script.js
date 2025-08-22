@@ -1,10 +1,6 @@
-// Neon Lucky Draw interactive wheel with predraw and Excel export
-// Calm slices, no fussy lines, neon halo, labels on top
-
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
-// Elements
 const namesEl = $("#names");
 const prizesEl = $("#prizes");
 const countNamesEl = $("#countNames");
@@ -15,7 +11,6 @@ const preCountEl = $("#preCount");
 const resultsTBody = $("#resultsTable tbody");
 const resultBannerEl = document.getElementById("resultBanner");
 
-// Buttons
 $("#saveLists").addEventListener("click", saveLists);
 $("#loadLists").addEventListener("click", loadLists);
 $("#clearLists").addEventListener("click", clearSaved);
@@ -23,8 +18,9 @@ $("#spinOnce").addEventListener("click", spinOnce);
 $("#preDraw").addEventListener("click", preDraw);
 $("#reset").addEventListener("click", resetResults);
 $("#exportExcel").addEventListener("click", exportExcel);
+$("#sortByName").addEventListener("click", sortResultsByName);
+$("#sortByNo").addEventListener("click", sortResultsByNo);
 
-// Stop button
 const stopBtn = $("#stop");
 let stopRequested = false;
 stopBtn.addEventListener("click", () => {
@@ -33,19 +29,16 @@ stopBtn.addEventListener("click", () => {
   toast("Stopped");
 });
 
-// Wheel
 const canvas = document.getElementById("wheel");
 const ctx = canvas.getContext("2d", { willReadFrequently: true });
 let rotation = 0;
 let animating = false;
 let cancelSpin = false;
 
-// Data
-let results = []; // { no, name, prize, time }
+let results = [];
 let remainingNames = [];
 let remainingPrizes = [];
 
-// Fit canvas to CSS size on HD screens and return the scale
 function fitCanvasToDisplay() {
   const dpr = Math.max(1, window.devicePixelRatio || 1);
   const rect = canvas.getBoundingClientRect();
@@ -59,7 +52,6 @@ function fitCanvasToDisplay() {
   return dpr;
 }
 
-// Helpers
 function parseList(text) {
   return text
     .split("\n")
@@ -92,14 +84,12 @@ function clearSaved() {
   toast("Saved lists cleared");
 }
 
-// Centre toast
 function toast(msg) {
   const prev = centerTextEl.textContent;
   centerTextEl.textContent = msg;
   setTimeout(() => (centerTextEl.textContent = prev), 900);
 }
 
-// Banner
 function setBanner(message) {
   if (!resultBannerEl) return;
   resultBannerEl.textContent = message;
@@ -107,16 +97,13 @@ function setBanner(message) {
   setTimeout(() => (resultBannerEl.style.transform = "scale(1)"), 140);
 }
 
-// Draw wheel with calm slices, optional neon halo, labels last
-// CHANGED: make the flags meaningful
-const GROUP_SIZE = 10; // group size used for ticks
-const MAX_LABELS_TARGET = 10; // cap visible labels
-const SHOW_DIVIDERS = true; // draw thin outer slice dividers
-const SHOW_GROUP_TICKS = true; // draw short ticks at group boundaries
-const SHOW_INNER_RING = true; // draw a subtle inner ring
-const NEON_GLOW = true; // neon rim glow
+const GROUP_SIZE = 10;
+const MAX_LABELS_TARGET = 10;
+const SHOW_DIVIDERS = true;
+const SHOW_GROUP_TICKS = true;
+const SHOW_INNER_RING = true;
+const NEON_GLOW = true;
 
-// CHANGED: drawWheel now respects all flags
 function drawWheel() {
   const scale = fitCanvasToDisplay();
   ctx.clearRect(0, 0, canvas.width / scale, canvas.height / scale);
@@ -126,9 +113,8 @@ function drawWheel() {
   const cx = canvas.width / 2 / scale;
   const cy = canvas.height / 2 / scale;
   const rOuter = Math.min(cx, cy) - 10;
-  const rInner = rOuter * 0.22; // inner ring radius if enabled
+  const rInner = rOuter * 0.22;
 
-  // gentle pulse for neon breathing
   const now = performance.now();
   const pulse = 0.8 + 0.2 * Math.sin(now * 0.004);
 
@@ -136,7 +122,6 @@ function drawWheel() {
   ctx.translate(cx, cy);
   ctx.rotate(rotation);
 
-  // helper to draw the rim with or without glow
   function strokeRim(radius, width = 5) {
     if (NEON_GLOW) {
       ctx.shadowColor = "rgba(255,255,255,0.95)";
@@ -153,7 +138,6 @@ function drawWheel() {
   }
 
   if (prizes.length === 0) {
-    // idle rim only
     strokeRim(rOuter, 6);
     ctx.restore();
     return;
@@ -162,22 +146,19 @@ function drawWheel() {
   const n = prizes.length;
   const angleStep = (Math.PI * 2) / n;
 
-  // calm face fill
   ctx.beginPath();
   ctx.arc(0, 0, rOuter, 0, Math.PI * 2);
   ctx.closePath();
-  ctx.fillStyle = "rgba(255,255,255,0.00)"; // transparent face
+  ctx.fillStyle = "rgba(255,255,255,0.00)";
   ctx.fill();
 
-  // NEW: dividers at the outer rim only if enabled
   if (SHOW_DIVIDERS) {
     ctx.save();
-    ctx.shadowBlur = 0; // keep lines crisp
+    ctx.shadowBlur = 0;
     ctx.strokeStyle = "rgba(255,255,255,0.20)";
     ctx.lineWidth = 1;
     for (let i = 0; i < n; i++) {
       const a = i * angleStep;
-      // short outer tick that does not cross labels
       const r1 = rOuter * 0.97;
       const r2 = rOuter;
       ctx.beginPath();
@@ -188,7 +169,6 @@ function drawWheel() {
     ctx.restore();
   }
 
-  // NEW: group ticks every GROUP_SIZE slices if enabled
   if (SHOW_GROUP_TICKS && GROUP_SIZE > 0) {
     ctx.save();
     ctx.shadowBlur = 0;
@@ -207,7 +187,6 @@ function drawWheel() {
     ctx.restore();
   }
 
-  // NEW: inner ring if enabled
   if (SHOW_INNER_RING) {
     ctx.save();
     ctx.shadowBlur = 0;
@@ -219,10 +198,8 @@ function drawWheel() {
     ctx.restore();
   }
 
-  // rim last so it feels bright
   strokeRim(rOuter - 1, 5);
 
-  // labels on top
   const visible = Math.min(n, MAX_LABELS_TARGET);
   const step = Math.max(1, Math.ceil(n / visible));
   ctx.fillStyle = "#e9f1ff";
@@ -264,14 +241,13 @@ function drawTextCentered(ctx, text, maxWidth) {
   });
 }
 
-// Spin to a specific index with cancel support
 function spinToIndex(index, opts = {}) {
   const prizes = parseList(prizesEl.value);
   const n = prizes.length;
   if (n === 0) return Promise.resolve({ cancelled: false });
 
   const angleStep = (Math.PI * 2) / n;
-  const targetAngle = (Math.PI * 3) / 2 - (index + 0.5) * angleStep; // pointer at top
+  const targetAngle = (Math.PI * 3) / 2 - (index + 0.5) * angleStep;
   const extraTurns = (opts.extraTurns ?? 3) + Math.random() * 1.5;
   let start = rotation % (Math.PI * 2);
   if (start < 0) start += Math.PI * 2;
@@ -304,7 +280,6 @@ function spinToIndex(index, opts = {}) {
   });
 }
 
-// Results table helpers
 function addResultRow({ no, name, prize, time }) {
   const tr = document.createElement("tr");
   tr.innerHTML = `<td>${no}</td><td>${escapeHtml(name)}</td><td>${escapeHtml(
@@ -322,6 +297,26 @@ function escapeHtml(s) {
   );
 }
 
+function renderResultsTable() {
+  resultsTBody.innerHTML = "";
+  results.forEach((entry, idx) => {
+    entry.no = idx + 1;
+    addResultRow(entry);
+  });
+}
+
+function sortResultsByName() {
+  results.sort((a, b) =>
+    a.name.localeCompare(b.name, "en", { sensitivity: "base" })
+  );
+  renderResultsTable();
+}
+
+function sortResultsByNo() {
+  results.sort((a, b) => a.no - b.no);
+  renderResultsTable();
+}
+
 function resetResults() {
   results = [];
   resultsTBody.innerHTML = "";
@@ -337,7 +332,6 @@ function nowTime() {
   return new Date().toLocaleString();
 }
 
-// Single spin
 async function spinOnce() {
   if (animating) return;
   stopRequested = false;
@@ -377,7 +371,6 @@ async function spinOnce() {
   drawWheel();
 }
 
-// Predraw continuous
 async function preDraw() {
   if (animating) return;
 
@@ -447,16 +440,17 @@ function tickerLine(text) {
   tickerEl.scrollTop = tickerEl.scrollHeight;
 }
 
-// Excel export using ExcelJS
 async function exportExcel() {
   if (results.length === 0) {
     toast("No results yet");
     return;
   }
+
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Lucky Draw";
   workbook.created = new Date();
   workbook.properties.date1904 = true;
+
   const ws = workbook.addWorksheet("Results", {
     properties: {
       defaultColWidth: 18,
@@ -472,7 +466,8 @@ async function exportExcel() {
     { header: "Prize", key: "prize", width: 28 },
     { header: "Time", key: "time", width: 22 },
   ];
-  results.forEach((r) => ws.addRow(r));
+
+  results.forEach((r, idx) => ws.addRow({ ...r, no: idx + 1 }));
 
   const header = ws.getRow(1);
   header.font = {
@@ -521,7 +516,7 @@ async function exportExcel() {
       { name: "Prize" },
       { name: "Time" },
     ],
-    rows: results.map((r) => [r.no, r.name, r.prize, r.time]),
+    rows: results.map((r, idx) => [idx + 1, r.name, r.prize, r.time]),
   });
 
   const ws2 = workbook.addWorksheet("Summary");
@@ -554,12 +549,9 @@ async function exportExcel() {
   a.remove();
 }
 
-// Init
 function initCanvasSize() {
-  // set a safe default CSS size so the first fit works
   canvas.style.width = "min(520px, 92vw)";
   canvas.style.height = "auto";
-  // set a default internal size
   canvas.width = 520;
   canvas.height = 520;
 }
@@ -568,7 +560,6 @@ loadLists();
 updateCounts();
 resetResults();
 
-// breathing neon even when idle
 let glowRAF = null;
 function startGlowLoop() {
   if (glowRAF) return;
