@@ -20,6 +20,7 @@
       <div class="field">
         <label for="names">Participants</label>
         <textarea id="names" placeholder="One name per line"></textarea>
+        <p id="duplicateWarning" class="warning-text" hidden></p>
       </div>
 
       <div class="field">
@@ -30,8 +31,9 @@
       <div class="meta">
         <div>Total participants: <strong id="countNames">0</strong></div>
         <div>Total prizes: <strong id="countPrizes">0</strong></div>
-        <div>
-          Pre draw count
+        <div>Remaining: <strong id="remainingCount">0</strong></div>
+        <div class="precount-field">
+          <label for="preCount">Pre draw count</label>
           <input id="preCount" type="number" min="1" value="10" />
         </div>
       </div>
@@ -46,13 +48,18 @@
 
     <section class="panel wheel-and-results">
       <section class="panel wheel-area">
-        <div id="resultBanner" class="result-banner">Ready</div>
+        <div id="resultBanner" class="result-banner" role="status" aria-live="polite">Ready</div>
+
+        <div class="progress-wrap" aria-hidden="true">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <div class="progress-label" id="progressLabel">0 of 0 drawn</div>
 
         <div class="wheel-wrap">
           <canvas id="wheel" width="520" height="520"></canvas>
           <div class="wheel-overlay">
             <div class="pointer"></div>
-            <div id="centerText" class="center-text">Ready</div>
+            <div id="centerText" class="center-text" aria-live="polite">Ready</div>
           </div>
         </div>
 
@@ -62,29 +69,34 @@
           <button id="stop" class="btn btn-danger">Stop</button>
           <button id="reset" class="btn btn-ghost">Reset results</button>
         </div>
+        <p class="kbd-hint"><kbd>Space</kbd> spin once &middot; <kbd>Esc</kbd> stop</p>
 
         <div class="ticker" id="ticker"></div>
       </section>
 
-      <section class="results">
+      <section class="panel results">
         <div class="results-head">
           <h2>Results</h2>
           <div class="results-actions">
+            <input id="searchResults" type="search" class="search-input" placeholder="Search participant…" aria-label="Search results" />
             <button id="sortByName" class="btn">Sort by name</button>
             <button id="sortByNo" class="btn">Sort by draw</button>
           </div>
         </div>
-        <table id="resultsTable">
-          <thead>
-            <tr>
-              <th>No</th>
-              <th>Participant</th>
-              <th>Prize</th>
-              <th>Time</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+        <div class="table-scroll">
+          <table id="resultsTable">
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>Participant</th>
+                <th>Prize</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="noResultsMsg" class="empty-text" hidden>No results yet.</p>
       </section>
     </section>
   </main>

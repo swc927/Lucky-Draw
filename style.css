@@ -73,6 +73,7 @@ body {
 }
 
 .panel {
+  min-width: 0;
   background: linear-gradient(
     180deg,
     rgba(12, 12, 36, 0.8),
@@ -106,6 +107,29 @@ textarea {
   padding: 12px;
   outline: none;
   box-shadow: inset 0 0 14px rgba(124, 77, 255, 0.08);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.warning-text {
+  color: #ffcf5c;
+  font-size: 13px;
+  margin: 6px 0 0;
+}
+.empty-text {
+  color: var(--muted);
+  text-align: center;
+  padding: 18px 0 6px;
+  font-size: 14px;
+}
+
+.precount-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.precount-field label {
+  margin: 0;
+  font-weight: 400;
 }
 
 .controls {
@@ -113,6 +137,7 @@ textarea {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 6px;
+  min-width: 0;
 }
 .meta {
   display: flex;
@@ -121,6 +146,7 @@ textarea {
   flex-wrap: wrap;
   color: var(--muted);
   margin-top: 8px;
+  min-width: 0;
 }
 .meta input {
   width: 80px;
@@ -150,6 +176,19 @@ textarea {
 }
 .btn:active {
   transform: translateY(0);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+.btn:focus-visible,
+textarea:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--neon1);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(0, 245, 255, 0.18);
 }
 .btn-ghost {
   background: transparent;
@@ -187,6 +226,41 @@ textarea {
   flex-direction: column;
   align-items: center;
   gap: 8px;
+}
+
+.progress-wrap {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(124, 77, 255, 0.15);
+  overflow: hidden;
+}
+.progress-bar {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--neon1), var(--neon2));
+  box-shadow: 0 0 10px rgba(0, 245, 255, 0.6);
+  transition: width 0.35s ease;
+}
+.progress-label {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: -2px;
+}
+
+.kbd-hint {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 2px 0 0;
+}
+.kbd-hint kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: rgba(124, 77, 255, 0.18);
+  border: 1px solid rgba(124, 77, 255, 0.4);
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-size: 11px;
 }
 .wheel-wrap {
   position: relative;
@@ -307,6 +381,27 @@ textarea {
 .results-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.search-input {
+  background: #0b0b23;
+  color: var(--text);
+  border: 1px solid rgba(124, 77, 255, 0.25);
+  border-radius: 10px;
+  padding: 8px 12px;
+  outline: none;
+  min-width: 0;
+  width: 160px;
+  max-width: 100%;
+}
+
+.table-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+  overflow-x: auto;
+  border-radius: 12px;
 }
 
 #resultsTable {
@@ -319,6 +414,8 @@ textarea {
     inset 0 0 40px rgba(124, 77, 255, 0.08);
 }
 #resultsTable thead th {
+  position: sticky;
+  top: 0;
   color: #e7f4ff;
   text-align: left;
   font-weight: 700;
@@ -330,6 +427,7 @@ textarea {
   );
   padding: 12px;
   border-bottom: 1px solid rgba(124, 77, 255, 0.35);
+  z-index: 1;
 }
 #resultsTable tbody td {
   padding: 10px 12px;
@@ -339,11 +437,44 @@ textarea {
 #resultsTable tbody tr:nth-child(even) {
   background: rgba(124, 77, 255, 0.06);
 }
+#resultsTable tbody tr:hover {
+  background: rgba(0, 245, 255, 0.1);
+}
+#resultsTable tbody tr.row-new {
+  animation: rowIn 0.4s ease;
+}
+@keyframes rowIn {
+  from {
+    background: rgba(42, 252, 152, 0.35);
+  }
+  to {
+    background: transparent;
+  }
+}
 
 .footer {
   text-align: center;
   color: var(--muted);
   padding: 18px;
+}
+
+.confetti-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 50;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .result-banner,
+  .progress-bar,
+  #resultsTable tbody tr.row-new {
+    transition: none;
+    animation: none;
+  }
 }
 
 @keyframes bannerPulse {

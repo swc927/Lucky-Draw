@@ -10,16 +10,25 @@ const centerTextEl = $("#centerText");
 const preCountEl = $("#preCount");
 const resultsTBody = $("#resultsTable tbody");
 const resultBannerEl = document.getElementById("resultBanner");
+const duplicateWarningEl = $("#duplicateWarning");
+const remainingCountEl = $("#remainingCount");
+const progressBarEl = $("#progressBar");
+const progressLabelEl = $("#progressLabel");
+const searchResultsEl = $("#searchResults");
+const noResultsMsgEl = $("#noResultsMsg");
+const spinOnceBtn = $("#spinOnce");
+const preDrawBtn = $("#preDraw");
 
 $("#saveLists").addEventListener("click", saveLists);
 $("#loadLists").addEventListener("click", loadLists);
 $("#clearLists").addEventListener("click", clearSaved);
-$("#spinOnce").addEventListener("click", spinOnce);
-$("#preDraw").addEventListener("click", preDraw);
+spinOnceBtn.addEventListener("click", spinOnce);
+preDrawBtn.addEventListener("click", preDraw);
 $("#reset").addEventListener("click", resetResults);
 $("#exportExcel").addEventListener("click", exportExcel);
 $("#sortByName").addEventListener("click", sortResultsByName);
 $("#sortByNo").addEventListener("click", sortResultsByNo);
+searchResultsEl.addEventListener("input", filterResultsTable);
 
 const stopBtn = $("#stop");
 let stopRequested = false;
@@ -27,6 +36,18 @@ stopBtn.addEventListener("click", () => {
   stopRequested = true;
   cancelSpin = true;
   toast("Stopped");
+});
+
+document.addEventListener("keydown", (e) => {
+  const tag = document.activeElement && document.activeElement.tagName;
+  const typing = tag === "TEXTAREA" || tag === "INPUT";
+  if (e.code === "Space" && !typing) {
+    e.preventDefault();
+    spinOnce();
+  } else if (e.key === "Escape") {
+    stopRequested = true;
+    cancelSpin = true;
+  }
 });
 
 const canvas = document.getElementById("wheel");
@@ -169,13 +190,69 @@ function parseList(text) {
     .filter(Boolean);
 }
 
+function checkDuplicates() {
+  const names = parseList(namesEl.value);
+  const seen = new Map();
+  for (const n of names) {
+    const key = n.toLowerCase();
+    if (!seen.has(key)) seen.set(key, { original: n, count: 0 });
+    seen.get(key).count++;
+  }
+  const dupes = [...seen.values()].filter((v) => v.count > 1);
+  if (dupes.length === 0) {
+    duplicateWarningEl.hidden = true;
+    duplicateWarningEl.textContent = "";
+  } else {
+    duplicateWarningEl.hidden = false;
+    const sample = dupes
+      .slice(0, 3)
+      .map((v) => v.original)
+      .join(", ");
+    const more = dupes.length > 3 ? ` and ${dupes.length - 3} more` : "";
+    duplicateWarningEl.textContent = `Duplicate name${
+      dupes.length > 1 ? "s" : ""
+    } detected: ${sample}${more}`;
+  }
+}
+
+function updateProgress() {
+  const total = parseList(namesEl.value).length;
+  const drawn = results.length;
+  const pct = total > 0 ? Math.min(100, (drawn / total) * 100) : 0;
+  progressBarEl.style.width = pct + "%";
+  progressLabelEl.textContent = `${drawn} of ${total} drawn`;
+  remainingCountEl.textContent = Math.max(0, total - drawn);
+}
+
 function updateCounts() {
   countNamesEl.textContent = parseList(namesEl.value).length;
   countPrizesEl.textContent = parseList(prizesEl.value).length;
+  checkDuplicates();
+  updateProgress();
   drawWheel();
 }
 namesEl.addEventListener("input", updateCounts);
 prizesEl.addEventListener("input", updateCounts);
+
+function filterResultsTable() {
+  const q = searchResultsEl.value.trim().toLowerCase();
+  let anyVisible = false;
+  $$("#resultsTable tbody tr").forEach((tr) => {
+    const name = tr.children[1] ? tr.children[1].textContent.toLowerCase() : "";
+    const match = q.length === 0 || name.includes(q);
+    tr.hidden = !match;
+    if (match) anyVisible = true;
+  });
+  if (results.length === 0) {
+    noResultsMsgEl.hidden = false;
+    noResultsMsgEl.textContent = "No results yet.";
+  } else if (!anyVisible) {
+    noResultsMsgEl.hidden = false;
+    noResultsMsgEl.textContent = "No matching participant.";
+  } else {
+    noResultsMsgEl.hidden = true;
+  }
+}
 
 function saveLists() {
   localStorage.setItem("neon_draw_names", namesEl.value);
@@ -189,6 +266,9 @@ function loadLists() {
   toast("Loaded saved lists");
 }
 function clearSaved() {
+  if (!confirm("Clear the saved participant and prize lists from this browser?")) {
+    return;
+  }
   localStorage.removeItem("neon_draw_names");
   localStorage.removeItem("neon_draw_prizes");
   toast("Saved lists cleared");
@@ -392,10 +472,12 @@ function spinToIndex(index, opts = {}) {
 
 function addResultRow({ no, name, prize, time }) {
   const tr = document.createElement("tr");
+  tr.className = "row-new";
   tr.innerHTML = `<td>${no}</td><td>${escapeHtml(name)}</td><td>${escapeHtml(
     prize
   )}</td><td>${time}</td>`;
   resultsTBody.appendChild(tr);
+  filterResultsTable();
 }
 function escapeHtml(s) {
   return String(s).replace(
@@ -413,6 +495,7 @@ function renderResultsTable() {
     entry.no = idx + 1;
     addResultRow(entry);
   });
+  filterResultsTable();
 }
 
 function sortResultsByName() {
@@ -435,6 +518,9 @@ function resetResults() {
   setBanner("Ready");
   remainingNames = parseList(namesEl.value);
   remainingPrizes = parseList(prizesEl.value);
+  searchResultsEl.value = "";
+  filterResultsTable();
+  updateProgress();
   drawWheel();
 }
 
@@ -453,6 +539,9 @@ async function spinOnce() {
     return;
   }
 
+  spinOnceBtn.disabled = true;
+  preDrawBtn.disabled = true;
+
   const nameIdx = Math.floor(Math.random() * remainingNames.length);
   const prizeIdx = Math.floor(Math.random() * remainingPrizes.length);
   const name = remainingNames.splice(nameIdx, 1)[0];
@@ -466,6 +555,8 @@ async function spinOnce() {
     remainingNames.splice(nameIdx, 0, name);
     centerTextEl.textContent = "Stopped";
     drawWheel();
+    spinOnceBtn.disabled = false;
+    preDrawBtn.disabled = false;
     return;
   }
 
@@ -478,7 +569,12 @@ async function spinOnce() {
   setBanner(`${name} got ${prize}`);
   centerTextEl.textContent = "Done";
   tickerLine(`[${String(entry.no).padStart(3, "0")}] ${name} got ${prize}`);
+  updateProgress();
+  fireConfetti();
   drawWheel();
+
+  spinOnceBtn.disabled = false;
+  preDrawBtn.disabled = false;
 }
 
 async function preDraw() {
@@ -499,6 +595,8 @@ async function preDraw() {
   tickerEl.textContent = "";
   centerTextEl.textContent = "Pre draw running";
   stopRequested = false;
+  spinOnceBtn.disabled = true;
+  preDrawBtn.disabled = true;
 
   const currentPrizeList = parseList(prizesEl.value);
 
@@ -533,6 +631,7 @@ async function preDraw() {
     setBanner(label);
     centerTextEl.textContent = "Running";
     tickerLine(`[${String(entry.no).padStart(3, "0")}] ${label}`);
+    updateProgress();
 
     await wait(90);
   }
@@ -540,6 +639,8 @@ async function preDraw() {
   if (!stopRequested)
     centerTextEl.textContent = `Pre draw complete ${results.length} pairs`;
   drawWheel();
+  spinOnceBtn.disabled = false;
+  preDrawBtn.disabled = false;
 }
 
 function wait(ms) {
@@ -548,6 +649,60 @@ function wait(ms) {
 function tickerLine(text) {
   tickerEl.textContent += text + "\n";
   tickerEl.scrollTop = tickerEl.scrollHeight;
+}
+
+const CONFETTI_COLORS = ["#00f5ff", "#7c4dff", "#ff1aff", "#2afc98", "#ffcf5c"];
+const prefersReducedMotion =
+  window.matchMedia &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function fireConfetti() {
+  if (prefersReducedMotion) return;
+
+  const canvas = document.createElement("canvas");
+  canvas.className = "confetti-canvas";
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  document.body.appendChild(canvas);
+  const c = canvas.getContext("2d");
+
+  const particles = Array.from({ length: 90 }, () => ({
+    x: canvas.width / 2 + (Math.random() - 0.5) * 200,
+    y: canvas.height * 0.35,
+    vx: (Math.random() - 0.5) * 8,
+    vy: Math.random() * -6 - 2,
+    size: Math.random() * 6 + 4,
+    color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+    rotation: Math.random() * Math.PI,
+    spin: (Math.random() - 0.5) * 0.3,
+  }));
+
+  const gravity = 0.25;
+  const start = performance.now();
+  const duration = 1500;
+
+  function frame(now) {
+    const t = now - start;
+    c.clearRect(0, 0, canvas.width, canvas.height);
+    particles.forEach((p) => {
+      p.vy += gravity;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rotation += p.spin;
+      c.save();
+      c.translate(p.x, p.y);
+      c.rotate(p.rotation);
+      c.fillStyle = p.color;
+      c.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+      c.restore();
+    });
+    if (t < duration) {
+      requestAnimationFrame(frame);
+    } else {
+      canvas.remove();
+    }
+  }
+  requestAnimationFrame(frame);
 }
 
 async function exportExcel() {
