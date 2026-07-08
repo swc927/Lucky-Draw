@@ -183,6 +183,27 @@ const DEFAULT_NAMES = [
   "Ervin Lim",
 ];
 
+const DEFAULT_PRIZES = [
+  "SIA Economy Flight Tickets from Singapore to Hong Kong for 2",
+  "Laguna National - Complimentary Golf Flights",
+  "Laguna National - Complimentary Golf Flights",
+  "Crowne Plaza Staycation Voucher",
+  "Dinning Voucher",
+  "Dinning Voucher",
+  "Dinning Voucher",
+  "Mitsubishi - Standing Fans ($159 ea)",
+  "Mitsubishi - Standing Fans ($159 ea)",
+  "Mitsubishi - Standing Fans ($159 ea)",
+  "Mitsubishi - Standing Fans ($159 ea)",
+  "Mitsubishi - Standing Fans ($159 ea)",
+  "Ariston Premiums - Cabin Luggage",
+  "Bee Choo Shampoos",
+  "NTUC Fairprice Vouchers",
+  "Pure Gold Collectibles (Aspiallifestyle)",
+  "Eu Yan Sang Herbal Flower Tea Series",
+  "Holistic Way Health Supplement",
+];
+
 function parseList(text) {
   return text
     .split("\n")
@@ -824,6 +845,9 @@ initCanvasSize();
 loadLists();
 if (!namesEl.value.trim()) {
   namesEl.value = DEFAULT_NAMES.join("\n");
+}
+if (!prizesEl.value.trim()) {
+  prizesEl.value = DEFAULT_PRIZES.join("\n");
 }
 updateCounts();
 resetResults();
